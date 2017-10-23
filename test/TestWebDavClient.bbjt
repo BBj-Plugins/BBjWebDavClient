@@ -1,0 +1,548 @@
+use ::WebDavClient.bbj::WebDavClient
+
+use java.io.File
+
+rem /**
+rem  * TestWebDavClient.bbj.bbjt
+rem  */
+class public TestWebDavClient
+
+    field private WebDavClient client!
+    field private String username!
+    field private String password!
+    field private String webdavRepoRoot!
+    field private String demoOutputDirectory!
+
+	rem @BeforeClass
+	method public void setUp()
+	    #client! = new WebDavClient()
+	    #webdavRepoRoot! = "http://192.168.0.205/sites/"
+	    #username! = "sadams"
+	    #password! = "demo"
+	    #demoOutputDirectory! = "D:\tmp\"
+	    #client!.open(#webdavRepoRoot!, #username!, #password!)
+	methodend
+	
+	rem @before
+	method public void methodInit()
+	    rem always starting from the root
+	    #client!.changeDirectory(#webdavRepoRoot!)
+	methodend
+	
+	rem @Test
+	method public void testPut()
+	    rem Testing if a file from the DS can be uploaded
+	    if(#client!.exists("Sample.bbj")) then
+	        #client!.delete("Sample.bbj")
+	    endif
+	    Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+	    
+	    #client!.put("test/res/Sample.bbj")
+	    Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+	    
+	    #client!.delete("Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+	  
+	    rem Testing the second put method with a custom location
+	    #client!.put("test/res/Sample.bbj", "CustomFileName.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("CustomFileName.bbj"))
+        
+        #client!.delete("CustomFileName.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("CustomFileName.bbj"))
+        
+        rem Testing with a destination location relative to the current directory
+        if(!#client!.exists("TestPut")) then
+            #client!.createDirectory("TestPut")
+        endif
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestPut"))
+        
+        if(#client!.exists("TestPut/Sample.bbj")) then
+            #client!.delete("TestPut/Sample.bbj")
+        endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestPut/Sample.bbj"))
+        
+        #client!.put("test/res/Sample.bbj", "TestPut/Sample.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestPut/Sample.bbj"))
+        
+        #client!.changeDirectory("TestPut/")
+        Assert.Equals(#webdavRepoRoot! + "TestPut/", #client!.pwd())
+        
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+        #client!.delete("Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+        
+        if(#client!.exists("../Sample.bbj")) then
+            #client!.delete("../Sample.bbj")
+        endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("../Sample.bbj"))
+        
+        #client!.put("test/res/Sample.bbj", "../Sample.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("../Sample.bbj"))
+        
+        #client!.delete("../Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("../Sample.bbj"))
+        
+        rem Testing with an invalid file path should fail 
+        Assert.Expect(#client!.put("Sample.bb"), 300)
+        
+        #client!.changeDirectory("..")
+        #client!.deleteDirectory("TestPut/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestPut/"))
+	methodend
+	
+	rem @Ignore
+	rem @Test
+	method public void testPutWithDSSyntax()
+	    if(#client!.exists("Sample.bbj")) then
+            #client!.delete("Sample.bbj")
+        endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+        
+        rem uncomment to test the DS syntax
+        #client!.put("/<192.168.0.205>/usr2/Sample.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+        
+        #client!.delete("Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+        
+        rem Testing the second put method with a custom location
+        #client!.put("/<192.168.0.205>/usr2/Sample.bbj", "CustomFileName.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("CustomFileName.bbj"))
+        
+        #client!.delete("CustomFileName.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("CustomFileName.bbj"))
+	methodend
+	
+	rem @Test
+	method public void testDelete()
+	    if(!#client!.exists("Sample.bbj")) then
+	        #client!.put("test/res/Sample.bbj")
+	    endif
+	    Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+        
+        #client!.delete("Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+        
+        rem Trying to delete a non existing file should throw an error
+        Assert.Expect(#client!.delete("Sample.bbj"), 300)
+	methodend
+
+	rem @Test
+	method public void testCreateDirectory()
+	    rem normal string 
+	    if(#client!.exists("directory/")) then
+	        #client!.deleteDirectory("directory/")
+	    endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+        #client!.createDirectory("directory")
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory/"))
+        
+        rem immediately removing the directory
+        #client!.deleteDirectory("directory/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+        
+        rem string with trailing slash
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+        #client!.createDirectory("directory/")
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory/"))
+        
+        rem immediately removing the directory
+        #client!.deleteDirectory("directory/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+        
+        rem creatig multiple directories at once
+        if(#client!.exists("directory1/")) then
+            #client!.delete("directory1/")
+        endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/"))
+        
+        if(#client!.exists("directory1/directory2")) then
+            #client!.delete("directory1/directory2/")
+        endif
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/directory2/"))
+        
+        #client!.createDirectory("directory1/directory2")
+        
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory1/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory1/directory2/"))
+        
+        rem Test the creation of directories relative to the current one
+        #client!.changeDirectory("directory1/")
+
+        Assert.Equals(Boolean.FALSE, #client!.exists("../demoDirectory/"))
+        
+        #client!.createDirectory("../demoDirectory/")
+        #client!.createDirectory("../demoDirectory/demoSubDirectory/")
+        
+        Assert.Equals(Boolean.TRUE, #client!.exists("../demoDirectory/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("../demoDirectory/demoSubDirectory/"))
+        
+        #client!.deleteDirectory("../demoDirectory/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("../demoDirectory/"))
+        
+        #client!.changeDirectory("..")
+        
+        rem cleanup
+        #client!.deleteDirectory("directory1/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/"))
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/directory2/"))
+	methodend
+	
+	rem @Test
+	method public void testDeleteDirectory()
+	    rem normal string 
+	    if(!#client!.exists("directory/")) then
+	        #client!.createDirectory("directory/")
+	    endif
+	    Assert.Equals(Boolean.TRUE, #client!.exists("directory/"))
+        #client!.deleteDirectory("directory")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+        
+        rem string with trailing slash
+        if(!#client!.exists("directory/")) then
+            #client!.createDirectory("directory/")
+        endif
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory/"))
+        #client!.deleteDirectory("directory/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory/"))
+
+        rem deleting the subdirectory
+        if(!#client!.exists("directory1/")) then
+            #client!.createDirectory("directory1/")
+        endif
+        if(!#client!.exists("directory1/directory2/")) then
+            #client!.createDirectory("directory1/directory2/")
+        endif
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory1/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("directory1/directory2/"))
+        #client!.deleteDirectory("directory1/directory2/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/directory2/"))
+        #client!.deleteDirectory("directory1/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("directory1/"))
+	methodend
+	
+	rem @Test
+	method public void testChangeDirectory()
+	    rem startig from the root
+	    Assert.Equals(#webdavRepoRoot!, #client!.pwd())
+	    
+	    rem Creating the folder structure
+	    if(!#client!.exists("TestChangeDirectory")) then
+            #client!.createDirectory("TestChangeDirectory")
+        endif
+        
+        if(!#client!.exists("TestChangeDirectory/sub1")) then
+            #client!.createDirectory("TestChangeDirectory/sub1")
+        endif
+        
+        if(!#client!.exists("TestChangeDirectory/sub2")) then
+            #client!.createDirectory("TestChangeDirectory/sub2")
+        endif
+        
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestChangeDirectory/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestChangeDirectory/sub1"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestChangeDirectory/sub2"))
+	    
+	    rem Checking if the changeDirectory works
+	    #client!.changeDirectory("TestChangeDirectory")
+	    Assert.Equals(#webdavRepoRoot! + "TestChangeDirectory/", #client!.pwd())
+	    
+	    rem moving back to the root
+	    #client!.changeDirectory("..")
+	    
+	    Assert.Equals(#webdavRepoRoot!, #client!.pwd())
+	    
+	    #client!.changeDirectory("TestChangeDirectory/sub1")
+	    
+	    Assert.Equals(#webdavRepoRoot! + "TestChangeDirectory/sub1/", #client!.pwd()) 
+		    
+	    #client!.changeDirectory("../sub2")
+	    
+	    Assert.Equals(#webdavRepoRoot! + "TestChangeDirectory/sub2/", #client!.pwd())
+	    
+	    rem moving back to the root
+	    #client!.changeDirectory("..")
+        #client!.changeDirectory("..")
+        
+        Assert.Equals(#webdavRepoRoot!, #client!.pwd())
+	    
+	    rem Trying to access a parent folder were webdav is not active
+	    rem this should fail
+	    Assert.Expect(#client!.changeDirectory(".."), 300)
+	    
+	    rem cleanup the folder structure
+	    #client!.deleteDirectory("TestChangeDirectory/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("changeDirTest/"))
+	methodend
+	
+	rem @Test
+	method public void testCopy()
+	    rem Creating the folder in which to test
+        if(!#client!.exists("TestCopy/")) then
+            #client!.createDirectory("TestCopy/")
+        endif
+        
+        rem Checking that the TestCopy/ folder exists
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestCopy/"))
+        
+        rem cd into the TestCopy/
+        #client!.changeDirectory("TestCopy/")
+        
+        rem Checking that the current repository is the TestCopy/
+        Assert.Equals(#webdavRepoRoot! + "TestCopy/", #client!.pwd())
+        
+        rem Adding the Sample.bbj file if it doesn't already exist
+        if(!#client!.exists("Sample.bbj")) then
+            #client!.put("test/res/Sample.bbj")
+        endif
+        
+        rem Checking that the Sample.bbj file was successfully put on the server
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+        
+        rem removing the file if it exists already because the method fails 
+        rem when trying to copy and the destination file does already exist
+        if(#client!.exists("Sample_copy.bbj")) then
+            #client!.delete("Sample_copy.bbj")
+        endif
+        
+        rem Check that the copy file doesn't exists else an error will be thrown
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample_copy.bbj"))
+        
+        rem copying the file
+        #client!.copy("Sample.bbj", "Sample_copy.bbj")
+        
+        rem checking that the file was successfully copied
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample_copy.bbj"))
+        
+        rem Checking that the simple copy doesn't perform an overwrite and throws an Error
+        Assert.Expect(#client!.copy("Sample.bbj", "Sample_copy.bbj"), 300)
+        
+        rem removing the copy to test the copy with overwrite method
+        #client!.delete("Sample_copy.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample_copy.bbj"))
+        
+        rem Check that the copy with overwrite does actually copy the file 
+        #client!.copy("Sample.bbj", "Sample_copy.bbj", Boolean.TRUE)
+        
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample_copy.bbj"))
+        
+        rem Check that the copy without overwrite does actually fail
+        Assert.Expect(#client!.copy("Sample.bbj", "Sample_copy.bbj", Boolean.FALSE), 300)
+        
+        rem Check that the copy with overwrite succeeds
+        #client!.copy("Sample.bbj", "Sample_copy.bbj", Boolean.TRUE)
+        
+        rem Testing the directory Copy
+        #client!.changeDirectory("/sites")
+        
+        rem chec that the current directory is the root
+        Assert.Equals(#webdavRepoRoot!, #client!.pwd())
+        
+        rem deleting the copy folder in case it was left over from a previous run
+        if(#client!.exists("TestCopy_Copy/")) then
+            #client!.delete("TestCopy_Copy/")
+        endif
+        
+        rem checking that the copy doesn't actually exist
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestCopy_Copy/"))
+        
+        rem copy the folder
+        #client!.copy("TestCopy/", "TestCopy_Copy/")
+        
+        rem Checking that the folder and its content has been copied
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestCopy_Copy/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestCopy_Copy/Sample.bbj"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestCopy_Copy/Sample_copy.bbj"))
+        
+        rem deleting the resources to be able to test the relative path copying 
+        #client!.delete("TestCopy_Copy/Sample.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestCopy_Copy/Sample.bbj"))
+        
+        #client!.delete("TestCopy/Sample_copy.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestCopy/Sample_copy.bbj"))
+
+        #client!.changeDirectory("TestCopy/")
+        Assert.Equals(#webdavRepoRoot! + "TestCopy/", #client!.pwd())
+        
+        rem testing with a relative destination path
+        #client!.copy("Sample.bbj", "../TestCopy_Copy/Sample.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("../TestCopy_Copy/Sample.bbj"))
+        
+        rem Testing with a relative source path
+        #client!.copy("../TestCopy_Copy/Sample_copy.bbj", "Sample_copy.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample_copy.bbj"))
+        
+        #client!.changeDirectory("..")
+        
+        rem removing the created files
+        #client!.delete("TestCopy/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestCopy/"))
+        
+        #client!.delete("TestCopy_Copy/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestCopy_Copy/"))
+	methodend
+	
+	rem @Test
+    method public void testMove()
+        rem Creating the folder in which to test
+        if(!#client!.exists("TestMove/")) then
+            #client!.createDirectory("TestMove/")
+        endif
+        
+        rem Checking that the TestMove/ folder exists
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove/"))
+        
+        rem cd into the TestMove/
+        #client!.changeDirectory("TestMove/")
+        
+        rem Checking that the current repository is the TestMove/
+        Assert.Equals(#webdavRepoRoot! + "TestMove/", #client!.pwd())
+        
+        rem Adding the Sample.bbj file if it doesn't already exist
+        if(!#client!.exists("Sample.bbj")) then
+            #client!.put("test/res/Sample.bbj")
+        endif
+        
+        rem Checking that the Sample.bbj file was successfully put on the server
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+              
+        rem removing the file if it exists already because the method fails 
+        rem when trying to move and the destination file does already exist
+        if(#client!.exists("Sample_old.bbj")) then
+            #client!.delete("Sample_old.bbj")
+        endif
+        
+        rem Check that the moved file doesn't exists else an error will be thrown
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample_old.bbj"))
+        
+        rem moving the file
+        #client!.move("Sample.bbj", "Sample_old.bbj")
+        
+        rem checking that the file was successfully moved
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample_old.bbj"))
+        
+        rem Checking that the source file doesn't exist anymore
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+        
+        rem Test the move on a folder
+        #client!.changeDirectory("..")
+        
+        rem Checking that the current repository is the TestMove/
+        Assert.Equals(#webdavRepoRoot!, #client!.pwd())
+        
+        if(#client!.exists("TestMove_old/")) then
+            #client!.deleteDirectory("TestMove_old/")
+        endif
+        
+        rem check if the TestMove_old/ doesn't exist
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestMove_old/"))
+        
+        rem moving the folder
+        #client!.move("TestMove/", "TestMove_old/")
+        
+        rem check if the move was successful
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestMove/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove_old/"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove_old/Sample_old.bbj"))
+        
+        rem copying the folder to test the overwrite and the relative path move
+        #client!.copy("TestMove_old/", "TestMove/")
+        
+        rem Expecting the regular mve to fail if the destination resource exists
+        Assert.Expect(#client!.move("TestMove/Sample_old.bbj", "TestMove_old/Sample_old.bbj"), 300)
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove/Sample_old.bbj"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove_old/Sample_old.bbj"))
+        
+        rem Expecting the move with overwrite=false to fail as well
+        Assert.Expect(#client!.move("TestMove/Sample_old.bbj", "TestMove_old/Sample_old.bbj", Boolean.FALSE), 300)
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove/Sample_old.bbj"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove_old/Sample_old.bbj"))
+        
+        rem Expecting the move with overwrite=true to pass
+        #client!.move("TestMove/Sample_old.bbj", "TestMove_old/Sample_old.bbj", Boolean.TRUE)
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestMove/Sample_old.bbj"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("TestMove_old/Sample_old.bbj"))
+        
+        rem testing the move with relative paths
+        #client!.changeDirectory("TestMove_old/")
+     
+        #client!.move("Sample_old.bbj", "../TestMove/Sample_old.bbj")
+        Assert.Equals(Boolean.FALSE, #client!.exists("Sample_old.bbj"))
+        Assert.Equals(Boolean.TRUE, #client!.exists("../TestMove/Sample_old.bbj"))
+        
+        #client!.move("../TestMove/Sample_old.bbj", "Sample_old.bbj")
+        Assert.Equals(Boolean.TRUE, #client!.exists("Sample_old.bbj"))
+        Assert.Equals(Boolean.FALSE, #client!.exists("../TestMove/Sample_old.bbj"))
+        
+        #client!.changeDirectory("..")
+
+        rem removing the created files
+        #client!.delete("TestMove/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestMove/"))
+        
+        #client!.delete("TestMove_old/")
+        Assert.Equals(Boolean.FALSE, #client!.exists("TestMove_old/"))
+    methodend
+	
+	rem @Test
+	method public void testGet()
+	    if(!#client!.exists("Sample.bbj")) then
+	        #client!.put("test/res/Sample.bbj")
+	    endif
+	    Assert.Equals(Boolean.TRUE, #client!.exists("Sample.bbj"))
+
+	    rem testing the get
+	    if(!#client!.exists("Folder/")) then
+	        #client!.createDirectory("Folder/")
+	    endif
+	    Assert.Equals(Boolean.TRUE, #client!.exists("Folder/"))
+	    
+	    #client!.get("Sample.bbj")
+	    
+	    declare File file!
+	    file! = new File(dsk("") + dir("") + "Sample.bbj")
+	    Assert.Equals(Boolean.TRUE, file!.exists())
+
+	    file!.delete()
+	    Assert.Equals(Boolean.FALSE, file!.exists())
+	    
+	    rem testing the get with filename/ filepath 
+	    #client!.get("Sample.bbj", "Other.bbj")
+        
+        file! = new File(dsk("") + dir("") + "Other.bbj")
+        Assert.Equals(Boolean.TRUE, file!.exists())
+
+        file!.delete()
+        Assert.Equals(Boolean.FALSE, file!.exists())
+        
+        #client!.get("Sample.bbj", demoOutputDirectory! + "Other.bbj")
+        
+        file! = new File(demoOutputDirectory! + "Other.bbj")
+        Assert.Equals(Boolean.TRUE, file!.exists())
+
+        file!.delete()
+        Assert.Equals(Boolean.FALSE, file!.exists())
+	    
+	    rem Trying to download a directory should throw an error
+	    Assert.Expect(#client!.get("Folder/"), 300)
+	    
+	    rem Trying to download a non Existing file should throw an error
+	    Assert.Expect(#client!.get("Other.bbj"), 300)
+	    
+	    #client!.delete("Sample.bbj")
+	    Assert.Equals(Boolean.FALSE, #client!.exists("Sample.bbj"))
+	    
+	    #client!.deleteDirectory("Folder/")
+	    Assert.Equals(Boolean.FALSE, #client!.exists("Folder/"))
+	methodend
+	
+	rem @Test
+    method public void testListResources()
+    methodend
+
+	rem @AfterClass
+	method public void tearDown()
+	    #client!.close()
+	methodend
+
+classend

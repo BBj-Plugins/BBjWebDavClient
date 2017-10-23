@@ -1,0 +1,8 @@
+{
+	"name":"BBjWebDavClient",
+	"description":"A BBj Wrapper class using the Sardine library to interact with a WebDav repository",
+	"version":"0.01",
+	"author":"Basis"
+}
+
+

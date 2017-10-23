@@ -1,0 +1,565 @@
+use java.util.Arrays
+use java.util.Iterator
+
+use java.net.URI
+use java.net.URL
+
+use java.lang.StringBuilder
+
+use java.io.File
+use java.io.InputStream
+use java.io.FileInputStream
+use java.io.ByteArrayInputStream
+use java.io.ByteArrayOutputStream
+
+use com.github.sardine.Sardine
+use com.github.sardine.DavResource
+use com.github.sardine.SardineFactory
+
+use com.basiscomponents.db.DataRow
+use com.basiscomponents.db.ResultSet
+
+class public WebDavClient
+
+    field private Sardine sardine!
+    field private URI repositoryURI!
+
+    method public WebDavClient()
+    methodend
+
+
+    rem /**
+    rem  * Returns the current WebDav workind directory.
+    rem  * 
+    rem  * @return the current WebDav working directory.
+    rem  */
+    method public String pwd()
+        methodret #repositoryURI!.toString()
+    methodend
+
+    rem /**
+    rem  * The method connects to the given WebDav repository using the given credentials,
+    rem  * if the connection could be established the url is saved and will be used for all
+    rem  * other methods provided by this class. If the connection fails and Error is thrown.
+    rem  * 
+    rem  * @param url! The WebDav repository URL
+    rem  * @param username! The username to establish the connection with
+    rem  * @param password! The password to establish the connection with 
+    rem  */
+    method public void open(String url!, String username!, String password!)
+        declare Sardine sardine!
+        sardine! = SardineFactory.begin(username!, password!)
+
+        #open(sardine!, url!)
+    methodend
+
+    rem /**
+    rem  * The method connects to the given WebDav repository,
+    rem  * if the connection could be established the url is saved and will be used for all
+    rem  * other methods provided by this class. If the connection fails and Error is thrown.
+    rem  * 
+    rem  * @param url! The WebDav repository URL
+    rem  */
+    method public void open(String url!)
+        declare Sardine sardine!
+        sardine! = SardineFactory.begin()
+
+        #open(sardine!, url!)
+    methodend
+
+    rem /**
+    rem  * Uses the given sardine object to read the repository with the given url.
+    rem  * If the connection fails an error is thrown, if it succeeds the sardine object and
+    rem  * the repository url are saved and used in the other methods of this class.
+    rem  * 
+    rem  * @param sardine! The Sardine ojbect to establish the connection to the WebDav repository.
+    rem  * @param url! The WebDav repository URL to connect to.
+    rem  */
+    method private void open(Sardine sardine!, String url!)
+        if(!url!.endsWith("/")) then
+            url! = url! + "/"
+        endif
+
+        declare URI newRepositoryURI!
+        newRepositoryURI! = new URI(url!)
+
+        rem check if the new repository is a web dav directory
+        declare java.util.List resourceList!
+        resourceList! = sardine!.list(newRepositoryURI!.toString(), err=*next)
+
+        if(resourceList! = null() OR resourceList!.isEmpty()) then
+            throw "Failed to open directory: The new directory could not be read " + newRepositoryURI!.toString(), 300
+        endif
+
+        #sardine! = sardine!
+        #repositoryURI! = newRepositoryURI!
+    methodend
+
+    rem /**
+    rem  * Changes the current repository URL to the given only if the 
+    rem  * given directory could be resolved and it could be read(= is a WebDav directory).
+    rem  * 
+    rem  * If the directory's content could not be read, an error is thrown.
+    rem  * 
+    rem  * @param directoryPath! The path of the directory to switch to.
+    rem  */
+    method public void changeDirectory(String directoryPath!)
+        declare URI newRepositoryURI!
+        newRepositoryURI! = cast(URI, #repositoryURI!.resolve(directoryPath!))
+
+        rem check if the new repository is a web dav directory
+        declare java.util.List resourceList!
+        resourceList! = #sardine!.list(newRepositoryURI!.toString(), err=*next)
+
+        if(resourceList! = null() OR resourceList!.isEmpty()) then
+            throw "Failed to change directory: The new directory could not be read " + newRepositoryURI!.toString(), 300
+        endif
+
+        uri! = newRepositoryURI!.toString()
+        if(!uri!.endsWith("/")) then
+            uri! = uri! + "/"
+        endif
+
+        #repositoryURI! = new URI(uri!)
+    methodend
+
+    rem /**
+    rem  * Creates the directory with the given name in the current directory.
+    rem  * The method also accepts a multiple directory syntax, allowing to create multiple directories at once.
+    rem  * For example: createDirectory("directory1/directory2").
+    rem  * 
+    rem  * The method also allows a relative path syntax, so that you can do something like:
+    rem  * createDirectory("../directory1")
+    rem  * 
+    rem  * @param directoryName! The directory or directories to create
+    rem  */
+    method public void createDirectory(String directoryName!)
+        if(!directoryName!.endsWith("/")) then
+            directoryName! = directoryName! + "/"
+        endif
+
+        rem the list of directories to add
+        declare java.util.List directoryNameList!
+        directoryNameList! = Arrays.asList(directoryName!.split("/"))
+
+        declare Iterator it!
+        it! = directoryNameList!.iterator()
+
+        declare URI newRepositoryURI!
+
+        declare String directoryPath!
+        directoryPath! = ""
+
+        while(it!.hasNext())
+            directoryName! = str(it!.next())
+            directoryPath! = directoryPath! + directoryName! + "/"
+
+            newRepositoryURI! = cast(URI, #repositoryURI!.resolve(directoryPath!))
+
+            if(#sardine!.exists(newRepositoryURI!.toString())) then
+                if(!it!.hasNext()) then
+                    throw "Failed to create directory: The directory does already exist " + newRepositoryURI!.toString(), 300
+                endif
+            else
+                #sardine!.createDirectory(newRepositoryURI!.toString())
+            endif
+        wend
+    methodend
+
+    rem /**
+    rem  * Deletes the directory at the given location, or throws an
+    rem  * error if the given location doesn't exist.
+    rem  * 
+    rem  * @param The path to the directory
+    rem  */
+    method public void deleteDirectory(String directoryName!)
+        if(!directoryName!.endsWith("/")) then
+            directoryName! = directoryName! + "/"
+        endif
+
+        declare URI newRepositoryURI!
+        newRepositoryURI! = cast(URI, #repositoryURI!.resolve(directoryName!))
+
+        if(!#sardine!.exists(newRepositoryURI!.toString())) then
+            throw "Failed to delete directory: The Directory doesn't exist " + newRepositoryURI!.toString(), 300
+        endif
+
+        #sardine!.delete(newRepositoryURI!.toString())
+    methodend
+
+    rem /**
+    rem  * Uploads the file spcified with the given name/path to the 
+    rem  * Server in the current directory. The method doesn't check
+    rem  * if the file exists or not, if it exists it will be overwritten.
+    rem  * 
+    rem  * @param filePath! The path of the file to upload.  
+    rem  */
+    method public void put(String filePath!)
+        declare String fullPath!
+        fullPath! = BBjAPI().getFileSystem().resolvePath(filePath!, err=*next)
+
+        rem In case the file couldn't be found, return
+        if(fullPath! = null()) then
+            throw "The specified file could not be found: " + filePath!, 300
+        endif
+
+        declare String fileName!
+        if(fullPath!.contains("/")) then
+            fileName! = fullPath!.substring(fullPath!.lastIndexOf("/") +1)
+        else
+            fileName! = fullPath!
+        endif
+
+        declare URI destinationURI!
+        destinationURI! = #repositoryURI!.resolve(fileName!)
+
+        #put(fullPath!, destinationURI!)
+    methodend
+
+    rem /**
+    rem  * Uploads the file spcified with the given name/path to the 
+    rem  * Server at the given location. The method doesn't check
+    rem  * if the file exists or not, if it exists it will be overwritten.
+    rem  * 
+    rem  * @param filePath! The path of the file to upload.
+    rem  * @param remoteFileLocation! The name/path were to upload the resource.  
+    rem  */
+    method public void put(String filePath!, String remoteFileLocation!)
+        declare String fullPath!
+        fullPath! = BBjAPI().getFileSystem().resolvePath(filePath!, err=*next)
+
+        rem In case the file couldn't be found, return
+        if(fullPath! = null()) then
+            ? "The specified file couldn't be found: " + filePath!
+            methodret
+        endif
+
+        declare URI destinationURI!
+        destinationURI! = #repositoryURI!.resolve(remoteFileLocation!)
+
+        #put(fullPath!, destinationURI!)
+    methodend
+
+    rem /**
+    rem  * Reads the bytes from the file at the given path, and creates 
+    rem  * a new resource at the given location with the read bytes as content.
+    rem  * 
+    rem  * @param filePath! The path of the file to upload.
+    rem  * @param uri! The location were to upload the file.
+    rem  */
+    method private void put(String filePath!, URI uri!)
+        rem reading the content of the file
+        rem this is necessary because the file might be on a remote server (DS)
+        declare StringBuilder content!
+        content! = new StringBuilder()
+
+        ch = unt
+        open(ch) filePath!
+        while(1)
+            read record(ch, siz=1024, end=*break) line$
+            content!.append(line$)
+        wend
+        close(ch)
+
+        declare ByteArrayInputStream bais!
+        bais! = new ByteArrayInputStream(content!.toString().getBytes())
+
+        #sardine!.put(uri!.toString(), bais!)
+    methodend
+
+    rem /**
+    rem  * Deletes the resource at the given location if it exists.
+    rem  * if it does not, an error is thrown.
+    rem  * 
+    rem  * @param fileLocation! The location of the file to delete.
+    rem  */
+    method public void delete(String fileLocation!)
+        declare URI fileLocationURI!
+        fileLocationURI! = #repositoryURI!.resolve(fileLocation!)
+
+        if(!#sardine!.exists(fileLocationURI!.toString())) then
+            throw "Failed to delete resource: The resource doesn't exist : " + fileLocationURI!.toString(),300
+        endif
+
+        #sardine!.delete(fileLocationURI!.toString())
+    methodend
+
+    rem /** 
+    rem  * Checks if a resource exists with the given path relative to the current
+    rem  * directory. Returns true if it exists, false otherwise.
+    rem  *  
+    rem  * @param resourcePath! The path of the resource to check. 
+    rem  */
+    method public Boolean exists(String resourcePath!)
+        declare URI newRepository!
+        newRepository! = cast(URI, #repositoryURI!.resolve(resourcePath!))
+
+        methodret #sardine!.exists(newRepository!.toString())
+    methodend
+
+    rem /**
+    rem  * Closes the connection.
+    rem  */
+    method public void close()
+        #sardine! = null()
+        #repositoryURI! = null()
+    methodend
+
+    rem /**
+    rem  * Copies the source at the given path to the given destination.
+    rem  * The method doesn't overwrite the destination resource if it already exists.
+    rem  * 
+    rem  * If you want to copy a resource and overwrite the resource at a given destination
+    rem  * use the #copy(String, String, Boolean) method
+    rem  * 
+    rem  * @param source! The relative path of the resource to copy
+    rem  * @param destination! The path of the destination resource relative to the current repository
+    rem  */
+    method public void copy(String source!, String destination!)
+        #copy(source!, destination!, Boolean.FALSE)
+    methodend
+
+    rem /**
+    rem  * Copies the source at the given path to the given destination.
+    rem  * The method overwrites the resource at the given destination depending on the given 
+    rem  * boolean switch. 
+    rem  * 
+    rem  * @param source! The relative path of the resource to copy
+    rem  * @param destination! The path of the destination resource relative to the current repository
+    rem  * @param overwrite! The boolean value indicating whether the destination resource should be overwritten or not
+    rem  */
+    method public void copy(String source!, String destination!, Boolean overwrite!)
+        declare URI sourceURI!
+        sourceURI! = cast(URI, #repositoryURI!.resolve(source!))
+
+        if(!#sardine!.exists(sourceURI!.toString())) then
+            throw "Failed to copy the resource: The source resource doesn't exist :" +  sourceURI!.toString(), 300
+        endif
+
+        declare URI destinationURI!
+        destinationURI! = cast(URI, #repositoryURI!.resolve(destination!))
+        if(#sardine!.exists(destinationURI!.toString()) AND !overwrite!) then
+            throw "Failed to copy the resource: The destination resource does already exist :" +  destinationURI!.toString(), 300
+        endif
+
+        #sardine!.copy(sourceURI!.toString(), destinationURI!.toString())
+    methodend
+
+    rem /**
+    rem  * Moves the source from the given location to the given destination.
+    rem  * The method doesn't overwrite the resource at the destination it if already exists.
+    rem  * If you want to overwrite the resource at the destination location, use the #move(String, String, Boolean) method.
+    rem  * 
+    rem  * @param source! The relative path of the resource to move
+    rem  * @param destination! The path of the destination resource relative to the current repository
+    rem  */
+    method public void move(String source!, String destination!)
+        #move(source!, destination!, Boolean.FALSE)
+    methodend
+
+    rem /**
+    rem  * Moves the source from the given location to the given destination.
+    rem  * The method overwrites the resource at the given destination depending on the given 
+    rem  * boolean switch. 
+    rem  * 
+    rem  * @param source! The relative path of the resource to move
+    rem  * @param destination! The path of the destination resource relative to the current repository
+    rem  * @param overwrite! The boolean value indicating whether the destination resource should be overwritten or not
+    rem  */
+    method public void move(String source!, String destination!, boolean overwrite!)
+        declare URI sourceURI!
+        sourceURI! = cast(URI, #repositoryURI!.resolve(source!))
+
+        if(!#sardine!.exists(sourceURI!.toString())) then
+            throw "Failed to move the resource: The source resource doesn't exist :" +  sourceURI!.toString(), 300
+        endif
+
+        declare URI destinationURI!
+        destinationURI! = cast(URI, #repositoryURI!.resolve(destination!))
+        if(#sardine!.exists(destinationURI!.toString()) AND !overwrite!) then
+            throw "Failed to move the resource: The destination resource does already exist :" +  destinationURI!.toString(), 300
+        endif
+
+        #sardine!.move(sourceURI!.toString(), destinationURI!.toString())
+    methodend
+
+    rem /**
+    rem  * Download the file at the given location into the current directory.
+    rem  * If a file with a similar name is already existing it will be overwritten.
+    rem  * 
+    rem  * @param filePath! The path of the file to be downloaded.
+    rem  */
+    method public void get(String filePath!)
+        declare URI resourceURI!
+        resourceURI! = #repositoryURI!.resolve(filePath!)
+
+        path! = resourceURI!.toString()
+        
+        rem Can the resourceURI not contain a slash ? 
+        fileName! = path!.substring(path!.lastIndexOf("/")+1)
+        
+        rem save the file in the current diretcory 
+        #get(resourceURI!, fileName!)
+    methodend
+
+    rem /**
+    rem  * Downloads the file at the given location and saves it 
+    rem  * at the given file path.
+    rem  * 
+    rem  * @param filePath! The path of the file to be downloaded.
+    rem  * @param localFilePath! The path were to save the dowloaded file.
+    rem  */
+    method public void get(String filePath!, String localFilePath!)
+        declare URI resourceURI!
+        resourceURI! = #repositoryURI!.resolve(filePath!)
+
+        #get(resourceURI!, localFilePath!)
+    methodend
+    
+    rem /**
+    rem  * Downloads the file at the given location and saves it 
+    rem  * at the given file path.
+    rem  * 
+    rem  * @param resourceURI! The path of the file to be downloaded.
+    rem  * @param localFilePath! The path were to save the dowloaded file.
+    rem  */
+    method private void get(URI resourceURI!, String localFilePath!)
+        if(!#sardine!.exists(resourceURI!.toString())) then
+            throw "Failed to download the resource: The resource doesn't exist: " + resourceURI!.toString(), 300
+        endif
+
+        declare java.util.List resourceList!
+        resourceList! = #sardine!.list(resourceURI!.toString())
+
+        if(resourceList! = null() OR resourceList!.isEmpty()) then
+            throw "Failed to retrieve information properties for the given resource: " + resourceURI!.toString(), 300
+        endif
+
+        rem check if the selected resource is a directory
+        if(cast(DavResource, resourceList!.get(0)).isDirectory()) then
+            throw "Cannot download directory, only files are supported.", 300
+        endif
+        
+        declare InputStream stream!
+        stream! = #sardine!.get(resourceURI!.toString())
+
+        declare StringBuilder sb!
+        sb! = new StringBuilder()
+
+        rem Hack to create a byte[1024] in BBj
+        rem creating an empty byte array
+        declare ByteArrayOutputStream bos!
+        bos! = new ByteArrayOutputStream(1024)
+        for i=0 to 1024-1
+            bos!.write(0)
+        next i
+        bytes! = bos!.toByteArray()
+
+        rem reading from the input stream(=URL)
+        byteRead = stream!.read(bytes!)
+        while (byteRead <> -1)
+            sb!.append(new String(bytes!))
+            byteRead = stream!.read(bytes!)
+        wend
+
+        rem writing the content into the file
+        ch = unt
+        open(ch, mode="o_create,o_trunc") localFilePath!
+        write(ch, end=*break) sb!.toString()
+        close(ch)
+
+        stream!.close()
+    methodend
+
+    rem /**
+    rem  * Lists the content of the current repository
+    rem  * and returns a ResultSet with a DataRow for each 
+    rem  * entry of the repository with its properties.
+    rem  */ 
+    method public ResultSet listResources()
+        methodret #listResources(#repositoryURI!)
+    methodend
+
+    rem /**
+    rem  * Lists the content of the given repository
+    rem  * and returns a ResultSet with a DataRow for each 
+    rem  * entry of the repository with its properties.
+    rem  */ 
+    method public void listResources(String url!)
+        declare URI resourceURI!
+        resourceURI! = #repositoryURI!.resolve(url!)
+        
+        methodret #listResources(resourceURI!) 
+    methodend
+    
+    rem /**
+    rem  * Returns a ResultSet which contains information about the 
+    rem  * resources from the current repository. Each DataRow 
+    rem  * represents one resource from the repository.
+    rem  * 
+    rem  * @param uri! The repository URI
+    rem  */
+    method private void listResources(URI uri!)
+        declare java.util.List resourceList!
+        resourceList! = #sardine!.list(#repositoryURI!.toString())
+    
+        declare Iterator it!
+        it! = resourceList!.iterator()
+
+        declare DataRow dataRow!
+        declare DavResource davResource!
+
+        declare ResultSet resultSet!
+        resultSet! = new ResultSet()
+
+        while(it!.hasNext())
+            davResource! = cast(DavResource, it!.next())
+            dataRow! = new DataRow()
+
+            dataRow!.setFieldValue("ContentLanguage", davResource!.getContentLanguage())
+            dataRow!.setFieldValue("ContentLength", davResource!.getContentLength())
+            dataRow!.setFieldValue("ContentType", davResource!.getContentType())
+            dataRow!.setFieldValue("Creation", davResource!.getCreation())
+            dataRow!.setFieldValue("DisplayName", davResource!.getDisplayName())
+            dataRow!.setFieldValue("ETag", davResource!.getEtag())
+            dataRow!.setFieldValue("Href", davResource!.getHref())
+            dataRow!.setFieldValue("Modified", davResource!.getModified())
+            dataRow!.setFieldValue("Name", davResource!.getName())
+            dataRow!.setFieldValue("Path", davResource!.getPath())
+            dataRow!.setFieldValue("IsDirectory", davResource!.isDirectory())
+
+            resultSet!.add(dataRow!)
+        wend
+
+        methodret resultSet!
+    methodend
+
+REM         rem Put an exclusive write lock on this resource.
+REM     method public String lock(String url!)
+REM         declare URI resourceURI!
+REM         resourceURI! = #repositoryURI!.resolve(url!)
+REM 
+REM         if(!#sardine!.exists(resourceURI!.toString())) then
+REM             throw "Failed to lock the resource: Resource doesn't exists: " + resourceURI!.toString(), 300
+REM         endif
+REM 
+REM         methodret #sardine!.lock(resourceURI!.toString())
+REM     methodend
+REM 
+REM     rem Unlock the resource.
+REM     method public void unlock(String url!, String token!)
+REM         declare URI resourceURI!
+REM         resourceURI! = #repositoryURI!.resolve(url!)
+REM 
+REM         if(!#sardine!.exists(resourceURI!.toString())) then
+REM             throw "Failed to unlock the resource: Resource doesn't exists: " + resourceURI!.toString(), 300
+REM         endif
+REM 
+REM         #sardine!.unlock(resourceURI!, token!)
+REM     methodend
+REM 
+REM     rem A LOCK request with no request body is a "LOCK refresh" request.
+REM     method public void refreshLock(String url!, String token!, String file!)
+REM     methodend
+
+classend

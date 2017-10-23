@@ -1,0 +1,12 @@
+0010 GB__SYSGUI=UNT
+0020 OPEN (GB__SYSGUI)"X0"
+0030 rem sysgui! = bbjapi().getSysGui()
+0040 ct=10
+0050 rem W_KOPF_1! = sysgui!.addWindow(ct,0,20,900,600,"Titel",$00810093$,$C3F007CC$)
+0051 PRINT 'WINDOW'(5,10,50,10),
+0060 print dec(ctrl(GB__SYSGUI))
+0070 print dec(sendmsg(gb__sysgui,0,20,0,$$))
+0080 rem W_KOPF_1!.destroy()
+0081 print 'DESTROY' (0),
+0090 print dec(ctrl(GB__SYSGUI))
+0100 print dec(sendmsg(gb__sysgui,0,20,0,$$))
