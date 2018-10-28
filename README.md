@@ -1,2 +1,1 @@
-# BBjWebDavClient
-A BBj Wrapper class using the Sardine library to interact with a WebDav repository.
+A BBj Wrapper class using the Sardine library to interact with a WebDav repository. This plugin allows you to interface with a WebDav server. WebDav is a protocol similar to FTP, but using http(s) as transport.
